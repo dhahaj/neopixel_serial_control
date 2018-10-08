@@ -1,52 +1,69 @@
 //#define REDUCED_MODES // sketch is too big for Arduino w/32k flash, so invoke reduced modes
 #include <WS2812FX.h>
+#include <EveryTimer.h>
 
 #define LED_COUNT 24
 #define LED_PIN 12
+#define PERIOD_MS 5000
 
-// Parameter 1 = number of pixels in strip
-// Parameter 2 = Arduino pin number (most are valid)
-// Parameter 3 = pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+/*
+  Parameter 1 = number of pixels in strip
+  Parameter 2 = Arduino pin number (most are valid)
+  Parameter 3 = pixel type flags, add together as needed:
+   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
+   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
+   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
+   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
+   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+*/
+
 WS2812FX ws2812fx = WS2812FX(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+EveryTimer timer;
 
 String cmd = "";               // String to store incoming serial commands
 boolean cmd_complete = false;  // whether the command string is complete
 
 void setup() {
-  Serial.begin(115200);
+#ifdef USE_SERIAL
+  Serial.begin(9600);
+#endif
   ws2812fx.init();
   ws2812fx.setBrightness(75);
   ws2812fx.setSpeed(750);
   ws2812fx.setColor(0x002BAF);
-  //  ws2812fx.setMode(FX_MODE_STATIC);
-  ws2812fx.setMode(FX_MODE_RAINBOW_CYCLE);
+  // ws2812fx.setMode(FX_MODE_RAINBOW_CYCLE);
   ws2812fx.start();
+#ifdef USE_SERIAL
   printModes();
   printUsage();
+#endif
+  timer.Every(PERIOD_MS, action);
 }
 
 void loop() {
   ws2812fx.service();
 
-  // On Atmega32U4 based boards (leonardo, micro) serialEvent is not called
-  // automatically when data arrive on the serial RX. We need to do it ourself
+  // On Atmega32U4 based boards (leonardo, micro) serialEvent is not called automatically when data arrive on the serial RX. We need to do it ourself
 #if defined(__AVR_ATmega32U4__) || defined(ESP8266)
   serialEvent();
 #endif
 
-  if (cmd_complete)
-    process_command();
+  if (cmd_complete) process_command();
+}
+
+void action(void)
+{
+  static int i;
+  if (i == 0) i = ws2812fx.getMode();
+  ws2812fx.setMode(i++);
+  i = i % ws2812fx.getModeCount();
 }
 
 /*
    Checks received command and calls corresponding functions.
 */
-void process_command() {
+void process_command(void)
+{
   if (cmd == F("b+")) {
     ws2812fx.increaseBrightness(25);
     Serial.print(F("Increased brightness by 25 to: "));
@@ -143,7 +160,8 @@ void printUsage() {
 /*
    Prints all available WS2812FX blinken modes.
 */
-void printModes() {
+void printModes(void)
+{
   Serial.println(F("Supporting the following modes: "));
   Serial.println();
   for (int i = 0; i < ws2812fx.getModeCount(); i++) {
@@ -158,17 +176,21 @@ void printModes() {
 /*
    Reads new input from serial to cmd string. Command is completed on \n
 */
-void serialEvent() {
-  while (Serial.available()) {
+void serialEvent()
+{
+#ifdef USE_SERIAL
+  while (Serial.available())
+  {
     char inChar = (char) Serial.read();
-    if (inChar == '\n') {
+    if (inChar == '\n')
       cmd_complete = true;
-    } else {
+    else
       cmd += inChar;
-    }
   }
+
   // ESP8266 doesn't terminate the command with "/n", so manually mark the command complete
 #if defined(ESP8266)
   cmd_complete = true;
+#endif
 #endif
 }
