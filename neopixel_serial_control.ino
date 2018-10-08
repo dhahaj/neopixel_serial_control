@@ -1,10 +1,12 @@
 //#define REDUCED_MODES // sketch is too big for Arduino w/32k flash, so invoke reduced modes
+
 #include <WS2812FX.h>
 #include <EveryTimer.h>
 
 #define LED_COUNT 24
-#define LED_PIN 12
+#define LED_PIN   12
 #define PERIOD_MS 5000
+#define USE_SERIAL
 
 /*
   Parameter 1 = number of pixels in strip
@@ -28,9 +30,9 @@ void setup() {
   Serial.begin(9600);
 #endif
   ws2812fx.init();
-  ws2812fx.setBrightness(75);
-  ws2812fx.setSpeed(750);
-  ws2812fx.setColor(0x002BAF);
+  ws2812fx.setBrightness(100);
+  // ws2812fx.setSpeed(1200);
+  ws2812fx.setColor(BLUE);
   // ws2812fx.setMode(FX_MODE_RAINBOW_CYCLE);
   ws2812fx.start();
 #ifdef USE_SERIAL
@@ -38,6 +40,7 @@ void setup() {
   printUsage();
 #endif
   timer.Every(PERIOD_MS, action);
+  timer.Start();
 }
 
 void loop() {
@@ -49,14 +52,18 @@ void loop() {
 #endif
 
   if (cmd_complete) process_command();
+  timer.Update();
 }
 
 void action(void)
 {
-  static int i;
-  if (i == 0) i = ws2812fx.getMode();
-  ws2812fx.setMode(i++);
+  int i = ws2812fx.getMode() + 1;
   i = i % ws2812fx.getModeCount();
+  ws2812fx.setMode(i);
+#ifdef USE_SERIAL
+  Serial.print(F("Changing mode to: "));
+  Serial.println(ws2812fx.getModeName(i));
+#endif
 }
 
 /*
@@ -129,6 +136,16 @@ void process_command(void)
     if (ws2812fx.getColor() < 0x000010)
       Serial.print(F("0"));
     Serial.println(ws2812fx.getColor(), HEX);
+  }
+
+  else if (cmd.startsWith(F("stop"))) {
+    Serial.println(F("Stopping timer."));
+    timer.Stop();
+  }
+
+  else if (cmd.startsWith(F("start"))) {
+    Serial.println(F("Starting timer."));
+    timer.Start();
   }
 
   cmd = "";              // reset the commandstring
